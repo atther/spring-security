@@ -1,38 +1,32 @@
 package com.ather.spring.security.login.controllers;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import com.ather.spring.security.login.models.ERole;
+import com.ather.spring.security.login.models.Role;
+import com.ather.spring.security.login.models.User;
+import com.ather.spring.security.login.payload.request.LoginRequest;
+import com.ather.spring.security.login.payload.request.SignupRequest;
+import com.ather.spring.security.login.payload.response.MessageResponse;
+import com.ather.spring.security.login.payload.response.UserInfoResponse;
+import com.ather.spring.security.login.repository.RoleRepository;
+import com.ather.spring.security.login.repository.UserRepository;
+import com.ather.spring.security.login.security.jwt.JwtUtils;
+import com.ather.spring.security.login.security.services.UserDetailsImpl;
 import jakarta.validation.Valid;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import com.ather.spring.security.login.models.ERole;
-import com.ather.spring.security.login.models.Role;
-import com.ather.spring.security.login.models.User;
-import com.ather.spring.security.login.payload.request.LoginRequest;
-import com.ather.spring.security.login.payload.request.SignupRequest;
-import com.ather.spring.security.login.payload.response.UserInfoResponse;
-import com.ather.spring.security.login.payload.response.MessageResponse;
-import com.ather.spring.security.login.repository.RoleRepository;
-import com.ather.spring.security.login.repository.UserRepository;
-import com.ather.spring.security.login.security.jwt.JwtUtils;
-import com.ather.spring.security.login.security.services.UserDetailsImpl;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 //for Angular Client (withCredentials)
@@ -65,20 +59,20 @@ public class AuthController {
 
     UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
-    ResponseCookie jwtCookie = jwtUtils.generateJwtCookie(userDetails);
+    String jwtToken = jwtUtils.GenerateToken(userDetails.getUsername());
 
     List<String> roles = userDetails.getAuthorities().stream()
         .map(item -> item.getAuthority())
         .collect(Collectors.toList());
 
-    return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
+    return ResponseEntity.ok().header(HttpHeaders.AUTHORIZATION, jwtToken)
         .body(new UserInfoResponse(userDetails.getId(),
                                    userDetails.getUsername(),
                                    userDetails.getEmail(),
                                    roles));
   }
 
-  @PostMapping("/signup")
+  @PostMapping( "/signup")
   public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
     if (userRepository.existsByUsername(signUpRequest.getUsername())) {
       return ResponseEntity.badRequest().body(new MessageResponse("Error: Username is already taken!"));
@@ -95,10 +89,12 @@ public class AuthController {
 
     Set<String> strRoles = signUpRequest.getRole();
     Set<Role> roles = new HashSet<>();
+    AtomicReference<String> msg = new AtomicReference<>("");
 
-    if (strRoles == null) {
+    if (strRoles == null || strRoles.isEmpty()) {
       Role userRole = roleRepository.findByName(ERole.ROLE_USER)
           .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+      msg.set("User Registered");
       roles.add(userRole);
     } else {
       strRoles.forEach(role -> {
@@ -106,18 +102,21 @@ public class AuthController {
         case "admin":
           Role adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
               .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+          msg.set("Admin Registered");
           roles.add(adminRole);
 
           break;
         case "mod":
           Role modRole = roleRepository.findByName(ERole.ROLE_MODERATOR)
               .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+          msg.set("Moderator Registered");
           roles.add(modRole);
 
           break;
         default:
           Role userRole = roleRepository.findByName(ERole.ROLE_USER)
               .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+          msg.set("User Registered");
           roles.add(userRole);
         }
       });
@@ -126,13 +125,13 @@ public class AuthController {
     user.setRoles(roles);
     userRepository.save(user);
 
-    return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
+    return ResponseEntity.ok(new MessageResponse(msg.get()));
   }
 
   @PostMapping("/signout")
   public ResponseEntity<?> logoutUser() {
-    ResponseCookie cookie = jwtUtils.getCleanJwtCookie();
-    return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString())
+    //ResponseCookie cookie = jwtUtils.getCleanJwtCookie();
+    return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, "cookie".toString())
         .body(new MessageResponse("You've been signed out!"));
   }
 }

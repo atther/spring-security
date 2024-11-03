@@ -1,5 +1,7 @@
 package com.ather.spring.security.login.security;
 
+import com.ather.spring.security.login.exceptions.AuthEntryPointException;
+import com.ather.spring.security.login.exceptions.GlobalExceptionHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -18,7 +20,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.ather.spring.security.login.security.jwt.AuthEntryPointJwt;
 import com.ather.spring.security.login.security.jwt.AuthTokenFilter;
 import com.ather.spring.security.login.security.services.UserDetailsServiceImpl;
 
@@ -37,7 +38,11 @@ public class WebSecurityConfig { // extends WebSecurityConfigurerAdapter {
   UserDetailsServiceImpl userDetailsService;
 
   @Autowired
-  private AuthEntryPointJwt unauthorizedHandler;
+  private AuthEntryPointException unauthorizedHandler;
+
+
+  @Autowired
+  GlobalExceptionHandler exceptionHandler;
 
   @Bean
   public AuthTokenFilter authenticationJwtTokenFilter() {
@@ -94,10 +99,10 @@ public class WebSecurityConfig { // extends WebSecurityConfigurerAdapter {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http.csrf(csrf -> csrf.disable())
-        .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
+        //.exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> 
-          auth.requestMatchers("/api/auth/**").permitAll()
+          auth.requestMatchers("/api/auth/**","/h2-ui/**").permitAll()
               .requestMatchers("/api/test/**").permitAll()
               .anyRequest().authenticated()
         );
